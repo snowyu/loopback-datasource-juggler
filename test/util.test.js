@@ -180,29 +180,24 @@ describe('util.mergeSettings', function() {
         {principalType: 'ROLE',
           principalId: '$everyone',
           permission: 'ALLOW',
-          property: 'create',
-          rank: 1},
+          property: 'create'},
         {principalType: 'ROLE',
           principalId: '$owner',
           permission: 'ALLOW',
-          property: 'removeById',
-          rank: 1},
+          property: 'removeById'},
         {accessType: '*',
           permission: 'DENY',
           principalType: 'ROLE',
-          principalId: '$everyone',
-          rank: 2},
+          principalId: '$everyone'},
         {accessType: '*',
           permission: 'ALLOW',
           principalType: 'ROLE',
           property: 'login',
-          principalId: '$everyone',
-          rank: 2},
+          principalId: '$everyone'},
         {permission: 'ALLOW',
           property: 'findById',
           principalType: 'ROLE',
-          principalId: '$owner',
-          rank: 2},
+          principalId: '$owner'},
       ],
       maxTTL: 31556926,
       ttl: 1209600,
@@ -211,189 +206,7 @@ describe('util.mergeSettings', function() {
         foreignKey: 'userId'},
         account: {model: 'account', type: 'belongsTo'}}};
 
-    should.deepEqual(dst.acls, expected.acls,
-      'Merged settings should match the expectation');
-  });
-
-  context('merge policy {replace: true} on top-level property', function() {
-    it('replaces baseClass array with subClass matching array', function() {
-      // merge policy of settings.description is {replace: true}
-      var subClassSettings = {
-        description: ['this', 'is', 'sub', 'class', 'description'],
-      };
-      var baseClassSettings = {
-        description: ['base', 'class', 'description'],
-      };
-
-      var targetSettings = mergeSettings(baseClassSettings, subClassSettings);
-
-      var expectedSettings = {
-        description: ['this', 'is', 'sub', 'class', 'description'],
-      };
-
-      should.deepEqual(targetSettings.description, expectedSettings.description,
-      'SubClass property "description" should replace baseClass description');
-    });
-  });
-
-  context('merge policy {replace: false} on top-level property', function() {
-    it('adds distinct members of matching arrays from baseClass and subClass', function() {
-      // merge policy of settings.hidden is {replace: false}
-      var subClassSettings = {
-        hidden: ['secondProperty', 'thirdProperty'],
-      };
-      var baseClassSettings = {
-        hidden: ['firstProperty', 'secondProperty'],
-      };
-
-      var targetSettings = mergeSettings(baseClassSettings, subClassSettings);
-
-      var expectedSettings = {
-        hidden: ['firstProperty', 'secondProperty', 'thirdProperty'],
-      };
-
-      should.deepEqual(targetSettings.hidden, expectedSettings.hidden,
-      'Target array "hidden" should include distinct members from baseClass and subClass settings');
-    });
-
-    it('adds distinct inner properties of matching objects from baseClass and subClass', function() {
-      // merge policy of settings.relations is not {replace: true}
-      var subClassSettings = {
-        relations: {
-          someRelation: {
-            type: 'belongsTo',
-            model: 'someModel',
-            foreignKey: 'modelId',
-          },
-        },
-      };
-      var baseClassSettings = {
-        relations: {
-          someOtherRelation: {
-            type: 'hasMany',
-            model: 'someOtherModel',
-            foreignKey: 'otherModelId',
-          },
-        },
-      };
-
-      var targetSettings = mergeSettings(baseClassSettings, subClassSettings);
-
-      var expectedSettings = {
-        relations: {
-          someRelation: {
-            type: 'belongsTo',
-            model: 'someModel',
-            foreignKey: 'modelId',
-          },
-          someOtherRelation: {
-            type: 'hasMany',
-            model: 'someOtherModel',
-            foreignKey: 'otherModelId',
-          },
-        },
-      };
-
-      should.deepEqual(targetSettings.relations, expectedSettings.relations,
-      'Target property "relations" should include relations from baseClass and subClass settings');
-    });
-  });
-
-  context('merge policy {innerReplace: true} on top-level property', function() {
-    it('replaces baseClass object\'s inner property with matching subClass object\'s ' +
-      'inner property', function() {
-      // merge policy of settings.relations is {innerReplace: true}
-      var subClassSettings = {
-        relations: {
-          user: {
-            type: 'belongsTo',
-            idName: 'id',
-            polymorphic: {
-              idType: 'string',
-              foreignKey: 'userId',
-              discriminator: 'principalType',
-            },
-          },
-        },
-      };
-      var baseClassSettings = {
-        relations: {
-          user: {
-            type: 'belongsTo',
-            model: 'User',
-            foreignKey: 'userId',
-          },
-        },
-      };
-
-      var targetSettings = mergeSettings(baseClassSettings, subClassSettings);
-
-      var expectedSettings = {
-        relations: {
-          user: {
-            type: 'belongsTo',
-            idName: 'id',
-            polymorphic: {
-              idType: 'string',
-              foreignKey: 'userId',
-              discriminator: 'principalType',
-            },
-          },
-        },
-      };
-
-      should.deepEqual(targetSettings.relations, expectedSettings.relations,
-        'SubClass property "relation" user should replace baseClass relation user');
-    });
-  });
-
-  context('ACLs merging algorithm', function() {
-    it('adds any ACLs from baseClass and subClass and appends rank to ACLs', function() {
-      var subClassSettings = {
-        acls: [
-          {
-            principalType: 'ROLE',
-            principalId: '$everyone',
-            property: 'myMethod',
-            permission: 'DENY',
-          },
-        ],
-      };
-      var baseClassSettings = {
-        acls: [
-          {
-            principalType: 'ROLE',
-            principalId: '$everyone',
-            property: 'myMethod',
-            permission: 'ALLOW',
-          },
-        ],
-      };
-
-      var targetSettings = mergeSettings(baseClassSettings, subClassSettings);
-
-      var expectedSettings = {
-        acls: [
-          {
-            principalType: 'ROLE',
-            principalId: '$everyone',
-            property: 'myMethod',
-            permission: 'ALLOW',
-            rank: 1,
-          },
-          {
-            principalType: 'ROLE',
-            principalId: '$everyone',
-            property: 'myMethod',
-            permission: 'DENY',
-            rank: 2,
-          },
-        ],
-      };
-
-      should.deepEqual(targetSettings.acls, expectedSettings.acls,
-        'BaseClass and subClass ACLs should have be added with respectively rank 1 and 2');
-    });
+    should.deepEqual(dst.acls, expected.acls, 'Merged settings should match the expectation');
   });
 });
 
