@@ -80,16 +80,20 @@ describe('ModelBuilder class', function() {
             permission: 'ALLOW',
           },
         ],
+        enableOptionatedModelMerge: true,
       });
       var modelRank3 = modelRank2.extend('modelRank3', {}, {});
-      var modelRank4 = modelRank3.extend('modelRank4', {}, {acls: [
-        {
-          principalType: 'ROLE',
-          principalId: '$everyone',
-          property: 'oneMethod',
-          permission: 'DENY',
-        },
-      ]});
+      var modelRank4 = modelRank3.extend('modelRank4', {}, {
+        acls: [
+          {
+            principalType: 'ROLE',
+            principalId: '$everyone',
+            property: 'oneMethod',
+            permission: 'DENY',
+          },
+        ],
+        enableOptionatedModelMerge: true,
+      });
 
       var expectedSettings = {
         acls: [
@@ -128,6 +132,7 @@ describe('ModelBuilder class', function() {
       });
       var child = base.extend('child', {}, {
         description: ['this', 'is', 'child', 'model', 'description'],
+        enableOptionatedModelMerge: true,
       });
 
       var expectedSettings = {
@@ -221,6 +226,7 @@ describe('ModelBuilder class', function() {
             },
           },
         },
+        enableOptionatedModelMerge: true,
       });
 
       var expectedSettings = {
