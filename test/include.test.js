@@ -5,10 +5,11 @@
 
 'use strict';
 
-/* global getSchema:false */
-var should = require('./init.js');
-var async = require('async');
+/* global getSchema:false, connectorCapabilities:false */
 var assert = require('assert');
+var async = require('async');
+var bdd = require('./helpers/bdd-if');
+var should = require('./init.js');
 
 var DataSource = require('../').DataSource;
 
@@ -40,7 +41,8 @@ describe('include', function() {
     });
   });
 
-  it('should fetch hasMany relation', function(done) {
+  bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+  'should fetch hasMany relation', function(done) {
     User.find({include: 'posts'}, function(err, users) {
       should.not.exist(err);
       should.exist(users);
@@ -60,7 +62,8 @@ describe('include', function() {
     });
   });
 
-  it('should not have changed the __strict flag of the model', function(done) {
+  bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+  'should not have changed the __strict flag of the model', function(done) {
     const originalStrict = User.definition.settings.strict;
     User.definition.settings.strict = true; // Change to test regression for issue #1252
     const finish = (err) => {
@@ -114,7 +117,8 @@ describe('include', function() {
     });
   });
 
-  it('should fetch Passport - Owner - Posts', function(done) {
+  bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+  'should fetch Passport - Owner - Posts', function(done) {
     Passport.find({include: {owner: 'posts'}}, function(err, passports) {
       should.not.exist(err);
       should.exist(passports);
@@ -167,7 +171,8 @@ describe('include', function() {
     });
   });
 
-  it('should fetch Passport - Owner - Posts - alternate syntax', function(done) {
+  bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+  'should fetch Passport - Owner - Posts - alternate syntax', function(done) {
     Passport.find({include: {owner: {relation: 'posts'}}}, function(err, passports) {
       should.not.exist(err);
       should.exist(passports);
@@ -178,7 +183,8 @@ describe('include', function() {
     });
   });
 
-  it('should fetch Passports - User - Posts - User', function(done) {
+  bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+  'should fetch Passports - User - Posts - User', function(done) {
     Passport.find({
       include: {owner: {posts: 'author'}},
     }, function(err, passports) {
@@ -208,7 +214,8 @@ describe('include', function() {
     });
   });
 
-  it('should fetch Passports with include scope on Posts', function(done) {
+  bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+  'should fetch Passports with include scope on Posts', function(done) {
     Passport.find({
       include: {owner: {relation: 'posts', scope: {
         fields: ['title'], include: ['author'],
@@ -243,7 +250,8 @@ describe('include', function() {
     });
   });
 
-  it('should support limit', function(done) {
+  bdd.itIf(connectorCapabilities.adhocSort !== false,
+  'should support limit', function(done) {
     Passport.find({
       include: {
         owner: {
@@ -257,7 +265,6 @@ describe('include', function() {
       limit: 2,
     }, function(err, passports) {
       if (err) return done(err);
-
       passports.length.should.equal(2);
       var posts1 = passports[0].toJSON().owner.posts;
       posts1.length.should.equal(1);
@@ -270,7 +277,45 @@ describe('include', function() {
     });
   });
 
-  describe('inq limit', function() {
+  bdd.itIf(connectorCapabilities.adhocSort === false,
+  'should support limit - no sort', function(done) {
+    Passport.find({
+      include: {
+        owner: {
+          relation: 'posts', scope: {
+            fields: ['title'], include: ['author'],
+            order: 'title DESC',
+            limit: 1,
+          },
+        },
+      },
+      limit: 2,
+    }, function(err, passports) {
+      var knownPosts = ['Post A', 'Post B', 'Post C', 'Post D', 'Post E'];
+      if (err) return done(err);
+      passports.length.should.equal(2);
+      var owner = passports[0].toJSON().owner;
+      if (owner) {
+        var posts1 = owner.posts;
+        posts1.length.should.belowOrEqual(1);
+        if (posts1.length === 1) {
+          posts1[0].title.should.be.equalOneOf(knownPosts);
+        }
+      }
+      owner = passports[1].toJSON().owner;
+      if (owner) {
+        var posts2 = owner.posts;
+        posts2.length.should.belowOrEqual(1);
+        if (posts2.length === 1) {
+          posts2[0].title.should.be.equalOneOf(knownPosts);
+        }
+      }
+      done();
+    });
+  });
+
+  bdd.describeIf(connectorCapabilities.adhocSort !== false,
+  'inq limit', function() {
     before(function() {
       Passport.dataSource.settings.inqLimit = 2;
     });
@@ -311,7 +356,8 @@ describe('include', function() {
     });
   });
 
-  describe('findWithForeignKeysByPage', function() {
+  bdd.describeIf(connectorCapabilities.adhocSort !== false,
+  'findWithForeignKeysByPage', function() {
     context('filter', function() {
       it('works when using a `where` with a foreign key', function(done) {
         User.findOne({
@@ -577,7 +623,335 @@ describe('include', function() {
     });
   });
 
-  it('should fetch Users with include scope on Posts - belongsTo',
+  bdd.describeIf(connectorCapabilities.adhocSort === false,
+  'findWithForeignKeysByPage', function() {
+    context('filter', function() {
+      it('works when using a `where` with a foreign key', function(done) {
+        User.findOne({
+          include: {
+            relation: 'passports',
+          },
+        }, function(err, user) {
+          if (err) return done(err);
+
+          var passport = user.passports()[0];
+          if (passport) {
+            var knownPassports = [];
+            var knownOwners = [];
+            var knownNumbers = [];
+            createdPassports.forEach(function(p) {
+              if (p.id) knownPassports.push(p.id.toString());
+              if (p.ownerId) knownOwners.push(p.ownerId.toString());
+              if (p.number) knownNumbers.push(p.number.toString());
+            });
+            passport.id.toString().should.be.equalOneOf(knownPassports);
+            passport.ownerId.toString().should.be.equalOneOf(knownOwners);
+            passport.number.toString().should.be.equalOneOf(knownNumbers);
+          }
+          done();
+        });
+      });
+
+      // Let me unskip!
+      it.skip('works when using a `where` with `and`', function(done) {
+        User.findOne({
+          include: {
+            relation: 'posts',
+            scope: {
+              where: {
+                and: [
+                  {id: createdPosts[0].id},
+                  {userId: createdPosts[0].userId},
+                  {title: 'Post A'},
+                ],
+              },
+            },
+          },
+        }, function(err, user) {
+// TODO:
+//    [ResponseError: userId cannot be restricted by more than one relation if it includes an Equal]
+//    query: 'SELECT "title","id","userId" FROM "Post" WHERE ("id"=?) AND ("userId"=?) AND ("title"=?)
+//      AND "userId" IN (?) ALLOW FILTERING'
+          if (err) return done(err);
+
+          user.name.should.equal('User A');
+          user.age.should.equal(21);
+          user.id.should.eql(createdUsers[0].id);
+          var posts = user.posts();
+          posts.length.should.equal(1);
+          var post = posts[0];
+          post.title.should.equal('Post A');
+          // eql instead of equal because mongo uses object id type
+          post.userId.should.eql(createdPosts[0].userId);
+          post.id.should.eql(createdPosts[0].id);
+
+          done();
+        });
+      });
+
+      it('works when using `where` with `limit`', function(done) {
+        User.findOne({
+          include: {
+            relation: 'posts',
+            scope: {
+              limit: 1,
+            },
+          },
+        }, function(err, user) {
+          if (err) return done(err);
+
+          user.posts().length.should.belowOrEqual(1);
+
+          done();
+        });
+      });
+
+      it('works when using `where` with `skip`', function(done) {
+        User.findOne({
+          include: {
+            relation: 'posts',
+            scope: {
+              skip: 1, // will be ignored
+            },
+          },
+        }, function(err, user) {
+          if (err) return done(err);
+
+          var knownPosts = [];
+          createdPosts.forEach(function(p) {
+            if (p.id) knownPosts.push(p.id.toString());
+          });
+          var ids = user.posts().map(function(p) { return p.id.toString(); });
+          ids.forEach(function(id) {
+            if (id) id.should.be.equalOneOf(knownPosts);
+          });
+
+          done();
+        });
+      });
+
+      it('works when using `where` with `offset`', function(done) {
+        User.findOne({
+          include: {
+            relation: 'posts',
+            scope: {
+              offset: 1, // will be ignored
+            },
+          },
+        }, function(err, user) {
+          if (err) return done(err);
+
+          var knownPosts = [];
+          createdPosts.forEach(function(p) {
+            if (p.id) knownPosts.push(p.id.toString());
+          });
+          var ids = user.posts().map(function(p) { return p.id.toString(); });
+          ids.forEach(function(id) {
+            if (id) id.should.be.equalOneOf(knownPosts);
+          });
+
+          done();
+        });
+      });
+
+      it('works when using `where` without `limit`, `skip` or `offset`',
+      function(done) {
+        User.findOne({include: {relation: 'posts'}}, function(err, user) {
+          if (err) return done(err);
+
+          var posts = user.posts();
+          var ids = posts.map(function(p) { return p.id.toString(); });
+          var knownPosts = [];
+          createdPosts.forEach(function(p) {
+            if (p.id) knownPosts.push(p.id.toString());
+          });
+          ids.forEach(function(id) {
+            if (id) id.should.be.equalOneOf(knownPosts);
+          });
+
+          done();
+        });
+      });
+    });
+
+    context('pagination', function() {
+      bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+      'works with the default page size (0) and `inqlimit` is exceeded',
+      function(done) {
+        // inqLimit modifies page size in the impl (there is no way to modify
+        // page size directly as it is hardcoded (once we decouple the func,
+        // we can use ctor injection to pass in whatever page size we want).
+        //
+        // --superkhau
+        Post.dataSource.settings.inqLimit = 2;
+
+        User.find({include: {relation: 'posts'}}, function(err, users) {
+          if (err) return done(err);
+
+          users.length.should.equal(5);
+
+          delete Post.dataSource.settings.inqLimit;
+
+          done();
+        });
+      });
+
+      bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+      'works when page size is set to 0', function(done) {
+        Post.dataSource.settings.inqLimit = 0;
+
+        User.find({include: {relation: 'posts'}}, function(err, users) {
+          if (err) return done(err);
+
+          users.length.should.equal(5);
+
+          delete Post.dataSource.settings.inqLimit;
+
+          done();
+        });
+      });
+    });
+
+    context('relations', function() {
+      // WARNING
+      // The code paths for in this suite of tests were verified manually due to
+      // the tight coupling of the `findWithForeignKeys` in `include.js`.
+      //
+      // TODO
+      // Decouple the utility functions into their own modules and export each
+      // function individually to allow for unit testing via DI.
+      //
+      // --superkhau
+
+      it('works when hasOne is called', function(done) {
+        User.findOne({include: {relation: 'profile'}}, function(err, user) {
+          if (err) return done(err);
+
+          var knownUsers = ['User A', 'User B', 'User C', 'User D', 'User E'];
+          var knownUserIds = [];
+          var knownProfileNames = [];
+          var knownProfileIds = [];
+          createdUsers.forEach(function(u) {
+            knownUserIds.push(u.id.toString());
+          });
+          createdProfiles.forEach(function(p) {
+            knownProfileNames.push(p.profileName.toString());
+            knownProfileIds.push(p.id.toString());
+          });
+          user.name.should.be.equalOneOf(knownUsers);
+          // eql instead of equal because mongo uses object id type
+          user.id.toString().should.be.equalOneOf(knownUserIds);
+          var profile = user.profile();
+          if (profile) {
+            profile.profileName.should.be.equalOneOf(knownProfileNames);
+            // eql instead of equal because mongo uses object id type
+            if (profile.userId) profile.userId.toString().should.be.equalOneOf(knownUserIds);
+            profile.id.toString().should.be.equalOneOf(knownProfileIds);
+          }
+
+          done();
+        });
+      });
+
+      it('works when hasMany is called', function(done) {
+        User.findOne({include: {relation: 'posts'}}, function(err, user) {
+          if (err) return done();
+
+          var knownUsers = ['User A', 'User B', 'User C', 'User D', 'User E'];
+          var knownUserIds = [];
+          createdUsers.forEach(function(u) {
+            knownUserIds.push(u.id.toString());
+          });
+          user.name.toString().should.be.equalOneOf(knownUsers);
+          // eql instead of equal because mongo uses object id type
+          user.id.toString().should.be.equalOneOf(knownUserIds);
+          user.posts().length.should.be.belowOrEqual(3);
+
+          done();
+        });
+      });
+
+      it('works when hasManyThrough is called', function(done) {
+        var Physician = db.define('Physician', {name: String});
+        var Patient = db.define('Patient', {name: String});
+        var Appointment = db.define('Appointment', {
+          date: {
+            type: Date,
+            default: function() {
+              return new Date();
+            },
+          },
+        });
+        var Address = db.define('Address', {name: String});
+
+        Physician.hasMany(Patient, {through: Appointment});
+        Patient.hasMany(Physician, {through: Appointment});
+        Patient.belongsTo(Address);
+        Appointment.belongsTo(Patient);
+        Appointment.belongsTo(Physician);
+
+        db.automigrate(['Physician', 'Patient', 'Appointment', 'Address'],
+          function() {
+            Physician.create(function(err, physician) {
+              physician.patients.create({name: 'a'}, function(err, patient) {
+                Address.create({name: 'z'}, function(err, address) {
+                  patient.address(address);
+                  patient.save(function() {
+                    physician.patients({include: 'address'},
+                        function(err, patients) {
+                          if (err) return done(err);
+
+                          patients.should.have.length(1);
+                          var p = patients[0];
+                          p.name.should.equal('a');
+                          p.addressId.should.eql(patient.addressId);
+                          p.address().id.should.eql(address.id);
+                          p.address().name.should.equal('z');
+
+                          done();
+                        });
+                  });
+                });
+              });
+            });
+          });
+      });
+
+      it('works when belongsTo is called', function(done) {
+        Profile.findOne({include: 'user'}, function(err, profile) {
+          if (err) return done(err);
+          if (!profile) return done(); // not every user has progile
+
+          var knownUsers = ['User A', 'User B', 'User C', 'User D', 'User E'];
+          var knownUserIds = [];
+          var knownProfileNames = [];
+          var knownProfileIds = [];
+          createdUsers.forEach(function(u) {
+            knownUserIds.push(u.id.toString());
+          });
+          createdProfiles.forEach(function(p) {
+            knownProfileNames.push(p.profileName.toString());
+            knownProfileIds.push(p.id.toString());
+          });
+          if (profile) {
+            profile.profileName.should.be.equalOneOf(knownProfileNames);
+            if (profile.userId) profile.userId.toString().should.be.equalOneOf(knownUserIds);
+            profile.id.toString().should.be.equalOneOf(knownProfileIds);
+            var user = profile.user();
+            if (user) {
+              user.name.should.be.equalOneOf(knownUsers);
+              user.id.toString().should.be.equalOneOf(knownUserIds);
+            }
+          }
+
+          done();
+        });
+      });
+    });
+  });
+
+  bdd.itIf(connectorCapabilities.adhocSort !== false,
+  'should fetch Users with include scope on Posts - belongsTo',
     function(done) {
       Post.find({include: {relation: 'author', scope: {fields: ['name']}}},
         function(err, posts) {
@@ -594,7 +968,29 @@ describe('include', function() {
         });
     });
 
-  it('should fetch Users with include scope on Posts - hasMany', function(done) {
+  bdd.itIf(connectorCapabilities.adhocSort === false,
+  'should fetch Users with include scope on Posts - belongsTo - no sort',
+    function(done) {
+      Post.find({include: {relation: 'author', scope: {fields: ['name']}}},
+        function(err, posts) {
+          should.not.exist(err);
+          should.exist(posts);
+          posts.length.should.equal(5);
+
+          var author = posts[0].author();
+          if (author) {
+            author.name.should.be.equalOneOf('User A', 'User B', 'User C', 'User D', 'User E');
+            author.should.have.property('id');
+            author.should.have.property('age', undefined);
+          }
+
+          done();
+        });
+    });
+
+  bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false &&
+    connectorCapabilities.adhocSort !== false,
+  'should fetch Users with include scope on Posts - hasMany', function(done) {
     User.find({
       include: {relation: 'posts', scope: {
         order: 'title DESC',
@@ -624,7 +1020,9 @@ describe('include', function() {
     });
   });
 
-  it('should fetch Users with include scope on Passports - hasMany', function(done) {
+  bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false &&
+    connectorCapabilities.adhocSort !== false,
+  'should fetch Users with include scope on Passports - hasMany', function(done) {
     User.find({
       include: {relation: 'passports', scope: {
         where: {number: '2'},
@@ -645,7 +1043,8 @@ describe('include', function() {
     });
   });
 
-  it('should fetch User - Posts AND Passports', function(done) {
+  bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+  'should fetch User - Posts AND Passports', function(done) {
     User.find({include: ['posts', 'passports']}, function(err, users) {
       should.not.exist(err);
       should.exist(users);
@@ -677,7 +1076,8 @@ describe('include', function() {
     });
   });
 
-  it('should fetch User - Posts AND Passports in relation syntax',
+  bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+  'should fetch User - Posts AND Passports in relation syntax',
     function(done) {
       User.find({include: [
         {relation: 'posts', scope: {
@@ -753,7 +1153,8 @@ describe('include', function() {
     });
   });
 
-  it('should fetch User - Profile (HasOne)', function(done) {
+  bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+  'should fetch User - Profile (HasOne)', function(done) {
     User.find({include: ['profile']}, function(err, users) {
       should.not.exist(err);
       should.exist(users);
@@ -797,7 +1198,8 @@ describe('include', function() {
     });
   });
 
-  it('should save related items separately', function(done) {
+  bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+  'should save related items separately', function(done) {
     User.find({
       include: 'posts',
     })
@@ -816,7 +1218,9 @@ describe('include', function() {
         posts.should.have.length(3);
       })
       .then(done)
-      .catch(done);
+      .catch(function(err) {
+        done(err);
+      });
   });
 
   describe('performance', function() {
@@ -833,6 +1237,7 @@ describe('include', function() {
     afterEach(function() {
       db.connector.all = all;
     });
+
     it('including belongsTo should make only 2 db calls', function(done) {
       var self = this;
       Passport.find({include: 'owner'}, function(err, passports) {
@@ -879,6 +1284,9 @@ describe('include', function() {
                 }, next);
               }, function(err) {
                 self.called = 0;
+                if (connectorCapabilities.supportINclauseWithNonPrimaryKey === false) {
+                  return done();
+                }
                 Assembly.find({
                   where: {
                     name: {
@@ -909,7 +1317,8 @@ describe('include', function() {
         });
     });
 
-    it('including hasMany should make only 2 db calls', function(done) {
+    bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+    'including hasMany should make only 2 db calls', function(done) {
       var self = this;
       User.find({include: ['posts', 'passports']}, function(err, users) {
         should.not.exist(err);
@@ -943,7 +1352,8 @@ describe('include', function() {
       });
     });
 
-    it('should not make n+1 db calls in relation syntax',
+    bdd.itIf(connectorCapabilities.supportINclauseWithNonPrimaryKey !== false,
+    'should not make n+1 db calls in relation syntax',
       function(done) {
         var self = this;
         User.find({include: [{relation: 'posts', scope: {
@@ -1015,19 +1425,24 @@ function setup(done) {
   City = db.define('City');
   Street = db.define('Street');
   Building = db.define('Building');
+
   User = db.define('User', {
     name: String,
     age: Number,
   });
+
   Profile = db.define('Profile', {
     profileName: String,
   });
+
   AccessToken = db.define('AccessToken', {
     token: String,
   });
+
   Passport = db.define('Passport', {
     number: String,
   });
+
   Post = db.define('Post', {
     title: String,
   });
@@ -1066,6 +1481,7 @@ function setup(done) {
           {name: 'User D', age: 24},
           {name: 'User E', age: 25},
         ],
+
         function(items) {
           createdUsers = items;
           createPassports();
