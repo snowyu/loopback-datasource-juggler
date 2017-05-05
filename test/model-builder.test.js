@@ -34,8 +34,8 @@ describe('ModelBuilder class', function() {
       });
       var baseChild = modelBuilder.define('baseChild');
       baseChild.attachTo(memory);
-    // the name of this must begin with a letter < b
-    // for this test to fail
+      // the name of this must begin with a letter < b
+      // for this test to fail
       var anotherChild = baseChild.extend('anotherChild');
 
       assert(anotherChild.prototype instanceof baseChild);
@@ -59,7 +59,7 @@ describe('ModelBuilder class', function() {
       assert(grandChild.prototype instanceof child);
     });
 
-    describe('merge policy with flag `enableOptionatedModelMerge`', function() {
+    describe('merge policy with flag `configurableModelMerge`', function() {
       describe('BaseModel.getMergePolicy()', function() {
         const defaultMergePolicy = {
           description: {replace: true},
@@ -137,7 +137,7 @@ describe('ModelBuilder class', function() {
           });
           var child = base.extend('child', {}, {
             anyParam: null,
-            enableOptionatedModelMerge: true,
+            configurableModelMerge: true,
           });
 
           var expectedSettings = {};
@@ -166,7 +166,7 @@ describe('ModelBuilder class', function() {
                 permission: 'ALLOW',
               },
             ],
-            enableOptionatedModelMerge: true,
+            configurableModelMerge: true,
           });
           var childRank2 = childRank1.extend('childRank2', {}, {});
           var childRank3 = childRank2.extend('childRank3', {}, {
@@ -178,7 +178,7 @@ describe('ModelBuilder class', function() {
                 permission: 'DENY',
               },
             ],
-            enableOptionatedModelMerge: true,
+            configurableModelMerge: true,
           });
 
           var expectedSettings = {
@@ -211,14 +211,14 @@ describe('ModelBuilder class', function() {
 
         it('`{replace: true}` replaces base model array with sub model matching ' +
         'array', function() {
-        // merge policy of settings.description is {replace: true}
+          // merge policy of settings.description is {replace: true}
           var modelBuilder = memory.modelBuilder;
           var base = modelBuilder.define('base', {}, {
             description: ['base', 'model', 'description'],
           });
           var child = base.extend('child', {}, {
             description: ['this', 'is', 'child', 'model', 'description'],
-            enableOptionatedModelMerge: true,
+            configurableModelMerge: true,
           });
 
           var expectedSettings = {
@@ -235,7 +235,7 @@ describe('ModelBuilder class', function() {
           });
           var child = base.extend('child', {}, {
             unknownArrayParam: ['this', 'should', 'remain', 'after', 'merge'],
-            enableOptionatedModelMerge: true,
+            configurableModelMerge: true,
           });
 
           var expectedSettings = {
@@ -252,7 +252,7 @@ describe('ModelBuilder class', function() {
           });
           var child = base.extend('child', {}, {
             unknownObjectParam: {anotherKey: 'this should remain after merge'},
-            enableOptionatedModelMerge: true,
+            configurableModelMerge: true,
           });
 
           var expectedSettings = {
@@ -264,14 +264,14 @@ describe('ModelBuilder class', function() {
 
         it('`{replace: false}` adds distinct members of matching arrays from ' +
         'base model and sub model', function() {
-        // merge policy of settings.hidden is {replace: false}
+          // merge policy of settings.hidden is {replace: false}
           var modelBuilder = memory.modelBuilder;
           var base = modelBuilder.define('base', {}, {
             hidden: ['firstProperty', 'secondProperty'],
           });
           var child = base.extend('child', {}, {
             hidden: ['secondProperty', 'thirdProperty'],
-            enableOptionatedModelMerge: true,
+            configurableModelMerge: true,
           });
 
           var expectedSettings = {
@@ -283,7 +283,7 @@ describe('ModelBuilder class', function() {
 
         it('`{patch: true}` adds distinct inner properties of matching objects ' +
         'from base model and sub model', function() {
-        // merge policy of settings.relations is {patch: true}
+          // merge policy of settings.relations is {patch: true}
           var modelBuilder = memory.modelBuilder;
           var base = modelBuilder.define('base', {}, {
             relations: {
@@ -302,7 +302,7 @@ describe('ModelBuilder class', function() {
                 foreignKey: 'modelId',
               },
             },
-            enableOptionatedModelMerge: true,
+            configurableModelMerge: true,
           });
 
           var expectedSettings = {
@@ -325,7 +325,7 @@ describe('ModelBuilder class', function() {
 
         it('`{patch: true}` replaces baseClass inner properties with matching ' +
         'subClass inner properties', function() {
-        // merge policy of settings.relations is {patch: true}
+          // merge policy of settings.relations is {patch: true}
           var modelBuilder = memory.modelBuilder;
           var base = modelBuilder.define('base', {}, {
             relations: {
@@ -348,7 +348,7 @@ describe('ModelBuilder class', function() {
                 },
               },
             },
-            enableOptionatedModelMerge: true,
+            configurableModelMerge: true,
           });
 
           var expectedSettings = {
