@@ -60,7 +60,7 @@ describe('ModelBuilder class', function() {
     });
 
     describe('merge policy with flag `configurableModelMerge`', function() {
-      describe('BaseModel.getMergePolicy()', function() {
+      describe('ModelBaseClass.getMergePolicy()', function() {
         const defaultMergePolicy = {
           description: {replace: true},
           options: {patch: true},
