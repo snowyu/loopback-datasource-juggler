@@ -3,28 +3,30 @@
 // This file is licensed under the MIT License.
 // License text available at https://opensource.org/licenses/MIT
 
-// This test written in mocha+should.js
+// This test is written in mocha+should.js
+
 'use strict';
-var should = require('./init.js');
-var assert = require('assert');
 
-var jdb = require('../');
-var ModelBuilder = jdb.ModelBuilder;
-var DataSource = jdb.DataSource;
-var Memory = require('../lib/connectors/memory');
+const should = require('./init.js');
+const assert = require('assert');
 
-var ModelDefinition = require('../lib/model-definition');
+const jdb = require('../');
+const ModelBuilder = jdb.ModelBuilder;
+const DataSource = jdb.DataSource;
+const Memory = require('../lib/connectors/memory');
+
+const ModelDefinition = require('../lib/model-definition');
 
 describe('ModelBuilder class', function() {
-  var memory;
+  let memory;
   beforeEach(function() {
     memory = new DataSource({connector: Memory});
   });
 
   describe('Model inheritance', function() {
-    it('should inherit prototype using option.base', function() {
-      var modelBuilder = memory.modelBuilder;
-      var parent = memory.createModel('parent', {}, {
+    it('inherits prototype using option.base', function() {
+      const modelBuilder = memory.modelBuilder;
+      const parent = memory.createModel('parent', {}, {
         relations: {
           children: {
             type: 'hasMany',
@@ -32,36 +34,44 @@ describe('ModelBuilder class', function() {
           },
         },
       });
-      var baseChild = modelBuilder.define('baseChild');
+      const baseChild = modelBuilder.define('baseChild');
       baseChild.attachTo(memory);
       // the name of this must begin with a letter < b
       // for this test to fail
-      var anotherChild = baseChild.extend('anotherChild');
+      const anotherChild = baseChild.extend('anotherChild');
 
       assert(anotherChild.prototype instanceof baseChild);
     });
 
-    it('should ignore inherited options.base', function() {
-      var modelBuilder = memory.modelBuilder;
-      var base = modelBuilder.define('base');
-      var child = base.extend('child', {}, {base: 'base'});
-      var grandChild = child.extend('grand-child');
+    it('ignores inherited options.base', function() {
+      const modelBuilder = memory.modelBuilder;
+      const base = modelBuilder.define('base');
+      const child = base.extend('child', {}, {base: 'base'});
+      const grandChild = child.extend('grand-child');
       assert.equal('child', grandChild.base.modelName);
       assert(grandChild.prototype instanceof child);
     });
 
-    it('should ignore inherited options.super', function() {
-      var modelBuilder = memory.modelBuilder;
-      var base = modelBuilder.define('base');
-      var child = base.extend('child', {}, {super: 'base'});
-      var grandChild = child.extend('grand-child');
+    it('ignores inherited options.super', function() {
+      const modelBuilder = memory.modelBuilder;
+      const base = modelBuilder.define('base');
+      const child = base.extend('child', {}, {super: 'base'});
+      const grandChild = child.extend('grand-child');
       assert.equal('child', grandChild.base.modelName);
       assert(grandChild.prototype instanceof child);
     });
 
-    describe('merge policy with flag `configurableModelMerge`', function() {
+    describe('merge policy WITH flag `configureModelMerge: true`', function() {
       describe('ModelBaseClass.getMergePolicy()', function() {
-        const defaultMergePolicy = {
+        const legacyMergePolicy = {
+          description: {replace: true},
+          properties: {patch: true},
+          hidden: {replace: false},
+          protected: {replace: false},
+          acls: {rank: true},
+        };
+
+        const recommendedMergePolicy = {
           description: {replace: true},
           options: {patch: true},
           properties: {patch: true},
@@ -85,70 +95,86 @@ describe('ModelBuilder class', function() {
           base = modelBuilder.define('base');
         });
 
-        it('returns default merge policy', function() {
+        it('returns legacy merge policy by default', function() {
           const mergePolicy = base.getMergePolicy();
-          should.deepEqual(mergePolicy, defaultMergePolicy);
+          should.deepEqual(mergePolicy, legacyMergePolicy);
+        });
+
+        it('returns recommended merge policy when called with option ' +
+        '`{configureModelMerge: true}`', function() {
+          const mergePolicy = base.getMergePolicy({configureModelMerge: true});
+          should.deepEqual(mergePolicy, recommendedMergePolicy);
         });
 
         it('handles custom merge policy defined via model.settings', function() {
+          let mergePolicy;
           const newMergePolicy = {
             relations: {patch: true},
           };
-          // defining a new merge policy with model.settings
-          base.settings.mergePolicy = newMergePolicy;
-          const mergePolicy = base.getMergePolicy();
+
+          // saving original getMergePolicy method
+          let originalGetMergePolicy = base.getMergePolicy;
+
+          // the injected getMergePolicy method captures the provided configureModelMerge option
+          base.getMergePolicy = function(options) {
+            mergePolicy = options && options.configureModelMerge;
+            return originalGetMergePolicy(options);
+          };
+
+          // calling extend() on base model calls base.getMergePolicy() internally
+          // child model settings are passed as 3rd parameter
+          const child = base.extend('child', {}, {configureModelMerge: newMergePolicy});
+
           should.deepEqual(mergePolicy, newMergePolicy);
+
+          // restoring original getMergePolicy method
+          base.getMergePolicy = originalGetMergePolicy;
         });
 
         it('can be extended by user', function() {
-          const alteredMergePolicy = Object.assign({}, defaultMergePolicy, {
+          const alteredMergePolicy = Object.assign({}, recommendedMergePolicy, {
             __delete: false,
           });
           // extending the builtin getMergePolicy function
-          base.getMergePolicy = function() {
-            const origin = base.base.getMergePolicy();
+          base.getMergePolicy = function(options) {
+            const origin = base.base.getMergePolicy(options);
             return Object.assign({}, origin, {
               __delete: false,
             });
           };
-          const mergePolicy = base.getMergePolicy();
+          const mergePolicy = base.getMergePolicy({configureModelMerge: true});
           should.deepEqual(mergePolicy, alteredMergePolicy);
         });
 
         it('is inherited by child model', function() {
-          const newMergePolicy = {
-            relations: {patch: true},
-          };
-          // defining a new merge policy on base with model.settings
-          base.settings.mergePolicy = newMergePolicy;
-          const child = base.extend('child');
+          const child = base.extend('child', {}, {configureModelMerge: true});
           // get mergePolicy from child
-          const mergePolicy = child.getMergePolicy();
-          should.deepEqual(mergePolicy, newMergePolicy);
+          const mergePolicy = child.getMergePolicy({configureModelMerge: true});
+          should.deepEqual(mergePolicy, recommendedMergePolicy);
         });
       });
 
       describe('merge policy settings', function() {
         it('`{__delete: null}` allows deleting base model settings by assigning ' +
         'null value at sub model level', function() {
-          var modelBuilder = memory.modelBuilder;
-          var base = modelBuilder.define('base', {}, {
+          const modelBuilder = memory.modelBuilder;
+          const base = modelBuilder.define('base', {}, {
             anyParam: {oneKey: 'this should be removed'},
           });
-          var child = base.extend('child', {}, {
+          const child = base.extend('child', {}, {
             anyParam: null,
-            configurableModelMerge: true,
+            configureModelMerge: true,
           });
 
-          var expectedSettings = {};
+          const expectedSettings = {};
 
           should.deepEqual(child.settings.description, expectedSettings.description);
         });
 
         it('`{rank: true}` defines rank of array elements ' +
         'according to model\'s inheritance rank', function() {
-          var modelBuilder = memory.modelBuilder;
-          var base = modelBuilder.define('base', {}, {acls: [
+          const modelBuilder = memory.modelBuilder;
+          const base = modelBuilder.define('base', {}, {acls: [
             {
               principalType: 'ROLE',
               principalId: '$everyone',
@@ -156,7 +182,7 @@ describe('ModelBuilder class', function() {
               permission: 'ALLOW',
             },
           ]});
-          var childRank1 = modelBuilder.define('childRank1', {}, {
+          const childRank1 = modelBuilder.define('childRank1', {}, {
             base: base,
             acls: [
               {
@@ -166,10 +192,10 @@ describe('ModelBuilder class', function() {
                 permission: 'ALLOW',
               },
             ],
-            configurableModelMerge: true,
+            configureModelMerge: true,
           });
-          var childRank2 = childRank1.extend('childRank2', {}, {});
-          var childRank3 = childRank2.extend('childRank3', {}, {
+          const childRank2 = childRank1.extend('childRank2', {}, {});
+          const childRank3 = childRank2.extend('childRank3', {}, {
             acls: [
               {
                 principalType: 'ROLE',
@@ -178,10 +204,10 @@ describe('ModelBuilder class', function() {
                 permission: 'DENY',
               },
             ],
-            configurableModelMerge: true,
+            configureModelMerge: true,
           });
 
-          var expectedSettings = {
+          const expectedSettings = {
             acls: [
               {
                 principalType: 'ROLE',
@@ -212,16 +238,16 @@ describe('ModelBuilder class', function() {
         it('`{replace: true}` replaces base model array with sub model matching ' +
         'array', function() {
           // merge policy of settings.description is {replace: true}
-          var modelBuilder = memory.modelBuilder;
-          var base = modelBuilder.define('base', {}, {
+          const modelBuilder = memory.modelBuilder;
+          const base = modelBuilder.define('base', {}, {
             description: ['base', 'model', 'description'],
           });
-          var child = base.extend('child', {}, {
+          const child = base.extend('child', {}, {
             description: ['this', 'is', 'child', 'model', 'description'],
-            configurableModelMerge: true,
+            configureModelMerge: true,
           });
 
-          var expectedSettings = {
+          const expectedSettings = {
             description: ['this', 'is', 'child', 'model', 'description'],
           };
 
@@ -229,16 +255,16 @@ describe('ModelBuilder class', function() {
         });
 
         it('`{replace:true}` is applied on array parameters not defined in merge policy', function() {
-          var modelBuilder = memory.modelBuilder;
-          var base = modelBuilder.define('base', {}, {
+          const modelBuilder = memory.modelBuilder;
+          const base = modelBuilder.define('base', {}, {
             unknownArrayParam: ['this', 'should', 'be', 'replaced'],
           });
-          var child = base.extend('child', {}, {
+          const child = base.extend('child', {}, {
             unknownArrayParam: ['this', 'should', 'remain', 'after', 'merge'],
-            configurableModelMerge: true,
+            configureModelMerge: true,
           });
 
-          var expectedSettings = {
+          const expectedSettings = {
             unknownArrayParam: ['this', 'should', 'remain', 'after', 'merge'],
           };
 
@@ -246,16 +272,16 @@ describe('ModelBuilder class', function() {
         });
 
         it('`{replace:true}` is applied on object {} parameters not defined in mergePolicy', function() {
-          var modelBuilder = memory.modelBuilder;
-          var base = modelBuilder.define('base', {}, {
+          const modelBuilder = memory.modelBuilder;
+          const base = modelBuilder.define('base', {}, {
             unknownObjectParam: {oneKey: 'this should be replaced'},
           });
-          var child = base.extend('child', {}, {
+          const child = base.extend('child', {}, {
             unknownObjectParam: {anotherKey: 'this should remain after merge'},
-            configurableModelMerge: true,
+            configureModelMerge: true,
           });
 
-          var expectedSettings = {
+          const expectedSettings = {
             unknownObjectParam: {anotherKey: 'this should remain after merge'},
           };
 
@@ -265,16 +291,16 @@ describe('ModelBuilder class', function() {
         it('`{replace: false}` adds distinct members of matching arrays from ' +
         'base model and sub model', function() {
           // merge policy of settings.hidden is {replace: false}
-          var modelBuilder = memory.modelBuilder;
-          var base = modelBuilder.define('base', {}, {
+          const modelBuilder = memory.modelBuilder;
+          const base = modelBuilder.define('base', {}, {
             hidden: ['firstProperty', 'secondProperty'],
           });
-          var child = base.extend('child', {}, {
+          const child = base.extend('child', {}, {
             hidden: ['secondProperty', 'thirdProperty'],
-            configurableModelMerge: true,
+            configureModelMerge: true,
           });
 
-          var expectedSettings = {
+          const expectedSettings = {
             hidden: ['firstProperty', 'secondProperty', 'thirdProperty'],
           };
 
@@ -284,8 +310,8 @@ describe('ModelBuilder class', function() {
         it('`{patch: true}` adds distinct inner properties of matching objects ' +
         'from base model and sub model', function() {
           // merge policy of settings.relations is {patch: true}
-          var modelBuilder = memory.modelBuilder;
-          var base = modelBuilder.define('base', {}, {
+          const modelBuilder = memory.modelBuilder;
+          const base = modelBuilder.define('base', {}, {
             relations: {
               someOtherRelation: {
                 type: 'hasMany',
@@ -294,7 +320,7 @@ describe('ModelBuilder class', function() {
               },
             },
           });
-          var child = base.extend('child', {}, {
+          const child = base.extend('child', {}, {
             relations: {
               someRelation: {
                 type: 'belongsTo',
@@ -302,10 +328,10 @@ describe('ModelBuilder class', function() {
                 foreignKey: 'modelId',
               },
             },
-            configurableModelMerge: true,
+            configureModelMerge: true,
           });
 
-          var expectedSettings = {
+          const expectedSettings = {
             relations: {
               someRelation: {
                 type: 'belongsTo',
@@ -326,8 +352,8 @@ describe('ModelBuilder class', function() {
         it('`{patch: true}` replaces baseClass inner properties with matching ' +
         'subClass inner properties', function() {
           // merge policy of settings.relations is {patch: true}
-          var modelBuilder = memory.modelBuilder;
-          var base = modelBuilder.define('base', {}, {
+          const modelBuilder = memory.modelBuilder;
+          const base = modelBuilder.define('base', {}, {
             relations: {
               user: {
                 type: 'belongsTo',
@@ -336,7 +362,7 @@ describe('ModelBuilder class', function() {
               },
             },
           });
-          var child = base.extend('child', {}, {
+          const child = base.extend('child', {}, {
             relations: {
               user: {
                 type: 'belongsTo',
@@ -348,10 +374,10 @@ describe('ModelBuilder class', function() {
                 },
               },
             },
-            configurableModelMerge: true,
+            configureModelMerge: true,
           });
 
-          var expectedSettings = {
+          const expectedSettings = {
             relations: {
               user: {
                 type: 'belongsTo',
@@ -367,6 +393,53 @@ describe('ModelBuilder class', function() {
 
           should.deepEqual(child.settings.relations, expectedSettings.relations);
         });
+      });
+    });
+
+    describe('merge policy WITHOUT flag `configureModelMerge`', function() {
+      it('defines rank of ACLs according to model\'s inheritance rank', function() {
+        // a simple test is enough as we already fully tested option `{rank: true}`
+        // in tests with flag `configureModelMerge`
+        const modelBuilder = memory.modelBuilder;
+        const base = modelBuilder.define('base', {}, {acls: [
+          {
+            principalType: 'ROLE',
+            principalId: '$everyone',
+            property: 'oneMethod',
+            permission: 'ALLOW',
+          },
+        ]});
+        const childRank1 = modelBuilder.define('childRank1', {}, {
+          base: base,
+          acls: [
+            {
+              principalType: 'ROLE',
+              principalId: '$everyone',
+              property: 'oneMethod',
+              permission: 'DENY',
+            },
+          ],
+        });
+
+        const expectedSettings = {
+          acls: [
+            {
+              principalType: 'ROLE',
+              principalId: '$everyone',
+              property: 'oneMethod',
+              permission: 'ALLOW',
+              __rank: 1,
+            },
+            {
+              principalType: 'ROLE',
+              principalId: '$everyone',
+              property: 'oneMethod',
+              permission: 'DENY',
+              __rank: 2,
+            },
+          ],
+        };
+        should.deepEqual(childRank1.settings.acls, expectedSettings.acls);
       });
     });
   });
